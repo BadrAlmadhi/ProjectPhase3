@@ -127,7 +127,7 @@ The application will start locally and connect to the configured PostgreSQL data
 
 ## Author
 
-**Badr Almadhi**
+**Badr Almadhi** and **Dylan Weiner**
 
 Master of Software Development  
 University of Utah
