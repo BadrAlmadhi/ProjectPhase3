@@ -1,4 +1,15 @@
+using Microsoft.EntityFrameworkCore;
+using ProjectPhase3.Data;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Connection to databases
+var connectionString =
+    builder.Configuration["LMS:ConnectionString"]
+    ?? throw new InvalidOperationException("Connection string not found.");
+
+builder.Services.AddDbContext<LmsContext>(options =>
+    options.UseNpgsql(connectionString));
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
