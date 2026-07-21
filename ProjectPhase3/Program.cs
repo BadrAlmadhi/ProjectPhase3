@@ -81,4 +81,21 @@ app.MapControllerRoute(
 // Makes /Identity/Account/Register and other Identity pages reachable.
 app.MapRazorPages();
 
+//adapted from https://codewithmukesh.com/blog/user-management-in-aspnet-core-mvc/
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+    try
+    {
+        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+        await ProjectPhase3.Authorization.Roles.SeedRolesAsync(roleManager);
+    }
+    catch (Exception ex)
+    {
+        var logger = loggerFactory.CreateLogger<Program>();
+        logger.LogError(ex, "An error occurred seeding the DB.");
+    }
+}
+
 app.Run();
