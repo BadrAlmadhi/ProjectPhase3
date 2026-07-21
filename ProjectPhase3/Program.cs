@@ -25,12 +25,15 @@ builder.Services.AddDbContext<LmsContext>(options =>
 builder.Services.AddDbContext<IdentityContext>(options =>
     options.UseNpgsql(identityConnectionString));
 
+
+
 // Add ASP.NET Core Identity.
 builder.Services
     .AddDefaultIdentity<IdentityUser>(options =>
     {
         options.SignIn.RequireConfirmedAccount = true;
     })
+    .AddRoles<IdentityRole>() // added Role
     .AddEntityFrameworkStores<IdentityContext>();
 
 // Add MVC and Razor Pages.
