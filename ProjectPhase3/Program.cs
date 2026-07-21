@@ -36,6 +36,20 @@ builder.Services
     .AddRoles<IdentityRole>() // added Role
     .AddEntityFrameworkStores<IdentityContext>();
 
+builder.Services.Configure<IdentityOptions>(options =>
+{
+    // Default Password settings.
+    options.Password.RequireDigit = false;
+    options.Password.RequireLowercase = false;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequiredLength = 1;
+    options.Password.RequiredUniqueChars = 1;
+    options.SignIn.RequireConfirmedAccount = false;
+    options.SignIn.RequireConfirmedEmail = false;
+    options.SignIn.RequireConfirmedPhoneNumber = false;
+});
+
 // Add MVC and Razor Pages.
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
