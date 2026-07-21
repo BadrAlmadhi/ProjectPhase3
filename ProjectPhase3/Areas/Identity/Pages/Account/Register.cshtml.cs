@@ -197,7 +197,7 @@ namespace ProjectPhase3.Areas.Identity.Pages
                 lmsCon.Add(newUserData);
                 lmsCon.SaveChanges();
 
-                return "ASDF";
+                return lmsCon.;
             }
         }
 
