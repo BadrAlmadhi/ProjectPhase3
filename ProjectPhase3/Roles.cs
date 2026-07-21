@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 
-namespace LMS.Authorization
+namespace ProjectPhase3.Authorization
 {
     public static class Roles
     {
