@@ -19,7 +19,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using ProjectPhase3.Data;
 
 namespace ProjectPhase3.Areas.Identity.Pages
 {
@@ -181,9 +183,22 @@ namespace ProjectPhase3.Areas.Identity.Pages
         /// <param name="role"></param>
         string CreateNewUser(string firstName, string lastName, DateTime DOB, string departmentAbbrev, string role)
         {
+            using (var lmsCon = new LmsContext(new DbContextOptions<LmsContext>()))
+            {
+                var newUserData = new InputModel
+                {
+                    FirstName = firstName,
+                    LastName = lastName,
+                    DOB = DOB,
+                    Department = departmentAbbrev,
+                    Role = role
+                };
 
-            //TODO FILL ME IN
-            return "ASDF";
+                lmsCon.Add(newUserData);
+                lmsCon.SaveChanges();
+
+                return "ASDF";
+            }
         }
 
         /*******End code to modify********/
