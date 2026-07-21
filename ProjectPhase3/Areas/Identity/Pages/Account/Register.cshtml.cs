@@ -22,6 +22,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ProjectPhase3.Data;
+using ProjectPhase3.Models;
 
 namespace ProjectPhase3.Areas.Identity.Pages
 {
@@ -187,21 +188,48 @@ namespace ProjectPhase3.Areas.Identity.Pages
             presetInfo.UseNpgsql("Host=atr.eng.utah.edu;Username=u1150859;Database=LMS1");
             using (LmsContext lmsCon = new LmsContext(presetInfo.Options))
             {
-                var newUserData = new InputModel
+                var newUserData = new User
                 {
-                    FirstName = firstName,
-                    LastName = lastName,
-                    DOB = DOB,
-                    Department = departmentAbbrev,
-                    Role = role
+                    Firstname = firstName,
+                    Lastname = lastName,
+                    Dob = DateOnly.FromDateTime(DOB)
                 };
-
+                
                 lmsCon.Add(newUserData);
+                
+                if(role == "Student")
+                {
+                    var newStudentData = new Student
+                    {
+                        // Userid = newUserData.Userid,
+                        Subjectabbreviation = departmentAbbrev,
+                        User = newUserData
+                    };
+                    lmsCon.Add(newStudentData);
+                }
+                else if (role == "Professor")
+                {
+                    var newProfData = new Professor
+                    {
+                        // Userid = newUserData.Userid,
+                        Subjectabbreviation =  departmentAbbrev,
+                        User = newUserData
+                    };
+                    lmsCon.Add(newProfData);
+                }
+                else if (role == "Administrator")
+                {
+                    var newProfData = new Administrator
+                    {
+                        // Userid = newUserData.Userid,
+                        User = newUserData
+                    };
+                    lmsCon.Add(newProfData);
+                }
+                
                 lmsCon.SaveChanges();
-
-                var newUser = lmsCon.Entry(newUserData);
-
-                return newUser.Property("userid").CurrentValue.ToString();
+                
+                return "u"+newUserData.Userid;
             }
         }
 
