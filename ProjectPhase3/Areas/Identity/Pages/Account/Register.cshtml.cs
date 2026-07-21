@@ -183,7 +183,9 @@ namespace ProjectPhase3.Areas.Identity.Pages
         /// <param name="role"></param>
         string CreateNewUser(string firstName, string lastName, DateTime DOB, string departmentAbbrev, string role)
         {
-            using (var lmsCon = new LmsContext(new DbContextOptions<LmsContext>()))
+            var presetInfo = new DbContextOptionsBuilder<LmsContext>();
+            presetInfo.UseNpgsql("Host=atr.eng.utah.edu;Username=u1150859;Database=LMS1");
+            using (LmsContext lmsCon = new LmsContext(presetInfo.Options))
             {
                 var newUserData = new InputModel
                 {
@@ -197,7 +199,9 @@ namespace ProjectPhase3.Areas.Identity.Pages
                 lmsCon.Add(newUserData);
                 lmsCon.SaveChanges();
 
-                return lmsCon.;
+                var newUser = lmsCon.Entry(newUserData);
+
+                return newUser.Property("userid").CurrentValue.ToString();
             }
         }
 
