@@ -49,13 +49,26 @@ namespace LMS.Controllers
         /// false if the department already exists, true otherwise.</returns>
         public IActionResult CreateDepartment(string subject, string name)
         {
-            var newDepData = new Department
+            var presetInfo = new DbContextOptionsBuilder<LmsContext>();
+            presetInfo.UseNpgsql("Host=atr.eng.utah.edu;Username=u1150859;Database=LMS1");
+            using (LmsContext lmsCon = new LmsContext(presetInfo.Options))
             {
-                Subjectabbreviation =  subject,
-                Departmentname =  name
-            };
-            
-            return Json(new { success = false});
+                var newDepData = new Department
+                {
+                    Subjectabbreviation = subject,
+                    Departmentname = name
+                };
+                try
+                {
+                    lmsCon.Departments.Add(newDepData);
+                    lmsCon.SaveChanges();
+                    return Json(new { success = true });
+                }
+                catch
+                {
+                    return Json(new { success = false});
+                }
+            }
         }
 
 
