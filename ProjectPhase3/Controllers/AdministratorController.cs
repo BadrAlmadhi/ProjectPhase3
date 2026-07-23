@@ -4,6 +4,9 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using ProjectPhase3.Data;
+using ProjectPhase3.Models;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -11,7 +14,8 @@ namespace LMS.Controllers
 {
     //TODO: add your controller as a "primary constructor" param:
     //eg: public class AdministratorController(MyContextType myContext) 
-    public class AdministratorController : Controller
+
+    public class AdministratorController(LmsContext lmsCon) : Controller
     {
 
 
@@ -45,6 +49,11 @@ namespace LMS.Controllers
         /// false if the department already exists, true otherwise.</returns>
         public IActionResult CreateDepartment(string subject, string name)
         {
+            var newDepData = new Department
+            {
+                Subjectabbreviation =  subject,
+                Departmentname =  name
+            };
             
             return Json(new { success = false});
         }
