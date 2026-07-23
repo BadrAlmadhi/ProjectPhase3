@@ -5,7 +5,9 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ProjectPhase3.Data;
+using ProjectPhase3.Models;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -14,8 +16,6 @@ namespace ProjectPhase3.Controllers
     [Authorize(Roles = "Professor")]
     public class ProfessorController(LmsContext db) : Controller
     {
-        private readonly LmsContext db;
-        
         public IActionResult Index()
         {
             return View();
@@ -244,6 +244,43 @@ namespace ProjectPhase3.Controllers
         /// <returns>A JSON object containing success = true/false</returns>
         public IActionResult CreateAssignment(string subject, int num, string season, int year, string category, string asgname, int asgpoints, DateTime asgdue, string asgcontents)
         {
+            var classid = db.Courses
+                .Join(db.Classes,
+                    courses => courses.Catalogid,
+                    classes => classes.Catalogid,
+                    (courses, classes) => new { courses, classes })
+                .Where(p => p.classes.Semester == (season + year))
+                .Where(p => p.courses.Subjectabbreviation == subject)
+                .Where(p => p.courses.Coursenumber == num)
+                .Select(p => new
+                {
+                    classid = p.classes.Classid
+                }).ToString();
+
+            if (classid != null)
+            {
+                var newAssignment = new Assignment
+                {
+                    Categorynames = category,
+                    Maxpoint =  asgpoints,
+                    Assignmentname = asgname,
+                    Duedate = asgdue,
+                    Content =  asgcontents,
+                    Classid = int.Parse(classid)
+                };
+
+                try
+                {
+                    db.Assignments.Add(newAssignment);
+                    db.SaveChanges();
+                
+                    return Json(new { success = true});
+                }
+                catch (DbUpdateException e)
+                {
+                    return Json(new { success = false });
+                }
+            }
             return Json(new { success = false });
         }
 
