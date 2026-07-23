@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ProjectPhase3.Data;
 using ProjectPhase3.Models;
 
@@ -15,8 +16,6 @@ namespace ProjectPhase3.Controllers
     //eg: public class AdministratorController(MyContextType myContext) 
     public class AdministratorController(LmsContext db) : Controller
     {
-
-        private readonly LmsContext db;
 
         // GET: /<controller>/
         public IActionResult Index()
@@ -48,24 +47,23 @@ namespace ProjectPhase3.Controllers
         /// false if the department already exists, true otherwise.</returns>
         public IActionResult CreateDepartment(string subject, string name)
         {
-
-            bool alreadyExists = db.Departments
-                .Any(d => d.Subjectabbreviation == subject);
-            if (alreadyExists)
-            {
-                return Json(new { success = false });
-            }
-
             var newDepartment = new Department
             {
                 Subjectabbreviation = subject,
                 Departmentname = name
             };
-            
-            db.Departments.Add(newDepartment);
-            db.SaveChanges();
-            
-            return Json(new { success = true});
+
+            try
+            {
+                db.Departments.Add(newDepartment);
+                db.SaveChanges();
+                
+                return Json(new { success = true});
+            }
+            catch (DbUpdateException e)
+            {
+                return Json(new { success = false });
+            }
         }
 
 
@@ -128,8 +126,8 @@ namespace ProjectPhase3.Controllers
         /// <returns>A JSON object containing {success = true/false}.
         /// false if the course already exists, true otherwise.</returns>
         public IActionResult CreateCourse(string subject, int number, string name)
-        {          
-            // fisrt check if course exsist 
+        {
+            // fisrt check if course exist 
             bool alreadyExists = db.Courses
                 .Any(c => c.Subjectabbreviation == subject &&
                           c.Coursenumber == number);
