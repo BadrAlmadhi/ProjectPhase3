@@ -111,19 +111,34 @@ namespace ProjectPhase3.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetStudentsInClass(string subject, int num, string season, int year)
         {
-            // var students = db.Enrollments
-            //         var class
-            //     .Where(p => p. == subject);
-            // var values = students
-            //     .Select(p => new
-            //     {
-            //         // lname = p.User.Lastname,
-            //         // fname = p.User.Firstname,
-            //         // uid = "u" + p.User.Userid
-            //     }).ToArray();
-            //
-            // return Json(values);
-            return Json(null);
+            var students = db.Enrollments
+                .Join(db.Classes,
+                    enrollments => enrollments.Classid,
+                    classes => classes.Classid,
+                    (enrollments, classes) => new { enrollments, classes })
+                .Join(db.Users,
+                    combo => combo.enrollments.Userid,
+                    users => users.Userid,
+                    (users, combo) => new
+                    { combo, users })
+                .Join(db.Courses,
+                    studentdata => studentdata.users.classes.Catalogid,
+                    courses => courses.Catalogid,
+                    (studentdata, courses) => new { studentdata, courses })
+                .Where(p => p.courses.Coursenumber == num)
+                .Where(p => p.courses.Subjectabbreviation == subject)
+                .Where(p => p.studentdata.users.classes.Semester != null && p.studentdata.users.classes.Semester.StartsWith(season))
+                .Where(p => p.studentdata.users.classes.Semester != null && p.studentdata.users.classes.Semester.EndsWith(year.ToString()))
+                .Select(p => new
+                {
+                    fname = p.studentdata.combo.Firstname,
+                    lname = p.studentdata.combo.Lastname,
+                    uid = p.studentdata.combo.Userid,
+                    dob = p.studentdata.combo.Dob,
+                    grade = p.studentdata.users.enrollments.Grade
+                }).ToArray();
+            
+            return Json(students);
         }
 
 
@@ -146,7 +161,38 @@ namespace ProjectPhase3.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetAssignmentsInCategory(string subject, int num, string season, int year, string category)
         {
-            return Json(null);
+            var assignments = db.Assignments
+                .Join(db.Classes,
+                    assignments => assignments.Classid,
+                    classes => classes.Classid,
+                    (assignments, classes) => new { assignments, classes })
+                .Join(db.Assignmentcategories,
+                    combo => combo.assignments.Classid,
+                    assignmentcats => assignmentcats.Classid,
+                    (assignmentcats, combo) => new
+                    { combo, assignmentcats })
+                .Join(db.Courses,
+                    assignmentdata => assignmentdata.assignmentcats.classes.Catalogid,
+                    courses => courses.Catalogid,
+                    (assignmentdata, courses) => new { assignmentdata, courses })
+                .Join(db.Submissions,
+                    fullassign => fullassign.assignmentdata.assignmentcats.assignments.Assignmentid,
+                    subs => subs.Assignmentid,
+                    (fullassign, subs) => new { fullassign, subs })
+                .Where(p => p.fullassign.courses.Coursenumber == num)
+                .Where(p => p.fullassign.courses.Subjectabbreviation == subject)
+                .Where(p => p.fullassign.assignmentdata.assignmentcats.assignments.Assignmentcategory != null && p.fullassign.assignmentdata.assignmentcats.assignments.Assignmentcategory.Categorynames == category)
+                .Where(p => p.fullassign.assignmentdata.assignmentcats.classes.Semester != null && p.fullassign.assignmentdata.assignmentcats.classes.Semester.StartsWith(season))
+                .Where(p => p.fullassign.assignmentdata.assignmentcats.classes.Semester != null && p.fullassign.assignmentdata.assignmentcats.classes.Semester.EndsWith(year.ToString()))
+                .Select(p => new
+                {
+                    aname = p.fullassign.assignmentdata.assignmentcats.assignments.Assignmentname,
+                    cname = p.fullassign.assignmentdata.assignmentcats.assignments.Categorynames,
+                    due = p.fullassign.assignmentdata.assignmentcats.assignments.Duedate,
+                    submissions = p.fullassign.assignmentdata.assignmentcats.assignments.Submissions.GroupBy(p => p.Assignmentid).Count(),
+                    
+                }).ToArray();
+            return Json(assignments);
         }
 
 
