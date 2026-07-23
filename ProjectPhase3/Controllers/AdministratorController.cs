@@ -168,57 +168,65 @@ namespace ProjectPhase3.Controllers
         /// true otherwise.</returns>
         public IActionResult CreateClass(string subject, int number, string season, int year, DateTime start, DateTime end, string location, string instructor)
         {
-            
-            string semester = season + " " + year;
-            // fix profosser id number without U
-            string numericPart = instructor.TrimStart('u', 'U');
-            if (!int.TryParse(numericPart, out int professorID))
+            try
+            {
+                string semester = season + " " + year;
+                // fix profosser id number without U
+                string numericPart = instructor.TrimStart('u', 'U');
+                if (!int.TryParse(numericPart, out int professorID))
+                {
+                    return Json(new { success = false });
+                }
+
+                // return the course
+                var courses = db.Courses.FirstOrDefault(c =>
+                    c.Subjectabbreviation == subject &&
+                    c.Coursenumber == number);
+
+                if (courses == null)
+                {
+                    return Json(new { success = false });
+                }
+
+                // check if course exsist 
+                bool sameCourseExists = db.Classes.Any(c =>
+                    c.Catalogid == courses.Catalogid &&
+                    c.Semester == semester);
+
+                if (sameCourseExists)
+                {
+                    return Json(new { success = false });
+                }
+
+                bool locationConflict = db.Classes.Any(c =>
+                    c.Location == location &&
+                    c.Semester == semester &&
+                    c.Starttime < end &&
+                    c.Endtime > start);
+
+                if (locationConflict)
+                {
+                    return Json(new { success = false });
+                }
+
+                var newClass = new Class
+                {
+                    Catalogid = courses.Catalogid,
+                    Semester = semester,
+                    Location = location,
+                    Starttime = start,
+                    Endtime = end,
+                    Professorid = professorID,
+                };
+
+                db.Classes.Add(newClass);
+                db.SaveChanges();
+                return Json(new { success = true });
+            }
+            catch (DbUpdateException e)
             {
                 return Json(new { success = false });
             }
-            
-            // return the course
-            var courses = db.Courses.FirstOrDefault(c => 
-                c.Subjectabbreviation == subject &&
-                c.Coursenumber == number);
-
-            if (courses != null)
-            {
-                return Json(new { success = false });
-            }
-            
-            // check if course exsist 
-            bool sameCourseExists = db.Courses.Any(c => 
-                c.Subjectabbreviation == subject &&
-                c.Coursenumber == number);
-
-            if (sameCourseExists)
-            {
-                return Json(new { success = false });
-            }
-            
-            bool locationConflict = db.Classes.Any(c =>
-                c.Location == location &&
-                c.Semester == semester &&
-                c.Starttime < end &&
-                c.Endtime > start);
-
-            if (locationConflict)
-            {
-                return Json(new { success = false });
-            }
-
-            var newClass = new Class
-            {
-                Catalogid = courses.Catalogid,
-                Semester = semester,
-                Location = location,
-                Starttime = start,
-                Endtime = end,
-                Professorid = professorID,
-            };
-            
-            return Json(new { success = true});
         }
 
 
