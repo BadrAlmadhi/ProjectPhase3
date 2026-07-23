@@ -22,20 +22,27 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ProjectPhase3.Data;
+
+
 using ProjectPhase3.Models;
 
 namespace ProjectPhase3.Areas.Identity.Pages
 {
+    
     public class RegisterModel(
         UserManager<IdentityUser> userManager,
         IUserStore<IdentityUser> userStore,
         SignInManager<IdentityUser> signInManager,
-        ILogger<RegisterModel> logger)
+        ILogger<RegisterModel> logger,
+        LmsContext lmsContext)
         : PageModel
     {
         //Use this if you're sending registration emails, which we're not
         //private readonly IUserEmailStore<IdentityUser> _emailStore;
         //private readonly IEmailSender _emailSender;
+        
+        private readonly LmsContext _lmsContext = lmsContext;
+        
 
         /*IEmailSender emailSender*/
         //_emailStore = GetEmailStore();
@@ -184,53 +191,57 @@ namespace ProjectPhase3.Areas.Identity.Pages
         /// <param name="role"></param>
         string CreateNewUser(string firstName, string lastName, DateTime DOB, string departmentAbbrev, string role)
         {
-            var presetInfo = new DbContextOptionsBuilder<LmsContext>();
-            presetInfo.UseNpgsql("Host=atr.eng.utah.edu;Username=u1150859;Database=LMS1");
-            using (LmsContext lmsCon = new LmsContext(presetInfo.Options))
+            // create new user
+            
+            // generate a unique seven-didgit integer
+            int newUserID;
+
+            do
             {
-                var newUserData = new User
+                newUserID = Random.Shared.Next(1000000, 10000000);
+            }
+            while(_lmsContext.Users.Any(u=> u.Userid == newUserID));
+            
+            // create main user record
+            var newUser = new User
+            {
+                Userid = newUserID,
+                Firstname = firstName,
+                Lastname = lastName,
+                Dob = DateOnly.FromDateTime(DOB),
+            };
+            
+            _lmsContext.Users.Add(newUser);
+
+            if (role == "Student")
+            {
+                var newStudent = new Student
                 {
-                    Firstname = firstName,
-                    Lastname = lastName,
-                    Dob = DateOnly.FromDateTime(DOB)
+                    Userid = newUserID,
+                    Subjectabbreviation = departmentAbbrev == "None" ? null : departmentAbbrev
                 };
                 
-                lmsCon.Add(newUserData);
-                
-                if(role == "Student")
+                _lmsContext.Students.Add(newStudent);
+            } else if (role == "Professor")
+            {
+                var newProfessor = new Professor
                 {
-                    var newStudentData = new Student
-                    {
-                        // Userid = newUserData.Userid,
-                        Subjectabbreviation = departmentAbbrev,
-                        User = newUserData
-                    };
-                    lmsCon.Add(newStudentData);
-                }
-                else if (role == "Professor")
+                    Userid = newUserID,
+                    Subjectabbreviation = departmentAbbrev == "None" ? null : departmentAbbrev
+                };
+                    _lmsContext.Professors.Add(newProfessor);
+            } else if (role == "Administrator")
+            {
+                var newAdministrator = new Administrator
                 {
-                    var newProfData = new Professor
-                    {
-                        // Userid = newUserData.Userid,
-                        Subjectabbreviation =  departmentAbbrev,
-                        User = newUserData
-                    };
-                    lmsCon.Add(newProfData);
-                }
-                else if (role == "Administrator")
-                {
-                    var newProfData = new Administrator
-                    {
-                        // Userid = newUserData.Userid,
-                        User = newUserData
-                    };
-                    lmsCon.Add(newProfData);
-                }
-                
-                lmsCon.SaveChanges();
-                
-                return "u"+newUserData.Userid;
+                    Userid = newUserID
+                };
+                _lmsContext.Administrators.Add(newAdministrator);
             }
+            
+            _lmsContext.SaveChanges();
+            
+            return "u" + newUserID;
         }
 
         /*******End code to modify********/

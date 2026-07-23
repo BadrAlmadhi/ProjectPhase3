@@ -15,9 +15,10 @@ public partial class Class
 
     public string? Location { get; set; }
 
-    public TimeOnly? Starttime { get; set; }
+    // changed to DateTime from TimeOnly
+    public DateTime? Starttime { get; set; }
 
-    public TimeOnly? Endtime { get; set; }
+    public DateTime? Endtime { get; set; }
 
     public virtual ICollection<Assignmentcategory> Assignmentcategories { get; set; } = new List<Assignmentcategory>();
 

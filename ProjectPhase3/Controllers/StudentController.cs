@@ -4,27 +4,37 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProjectPhase3.Data;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
-namespace LMS.Controllers
+namespace ProjectPhase3.Controllers
 {
     //TODO: add your controller as a "primary constructor" param:
     //eg: public class ProfessorController(MyContextType myContext) 
+    // this means the whole controller is restricted to users with student role
     [Authorize(Roles = "Student")]
-    public class StudentController : Controller
+    // added primary constructor lmsContext db
+    public class StudentController(LmsContext db) : Controller
     {
 
+        // store context 
+        private readonly LmsContext db = db;
+        
+
+        // view/Student/index.cshtml
         public IActionResult Index()
         {
             return View();
         }
 
+        // view/Student/Catalog.cshtml
         public IActionResult Catalog()
         {
             return View();
         }
 
+        // receives info from URL or Query String  
         public IActionResult Class(string subject, string num, string season, string year)
         {
             ViewData["subject"] = subject;
@@ -70,8 +80,71 @@ namespace LMS.Controllers
         /// <param name="uid">The uid of the student</param>
         /// <returns>The JSON array</returns>
         public IActionResult GetMyClasses(string uid)
-        {           
-            return Json(null);
+        {
+            // we dont need to use varification because we already have     [Authorize(Roles = "Student")]
+
+            // remove the u so we can check only number
+            string numericPart = uid.TrimStart('u', 'U');
+
+            // now we check only number
+            if (!int.TryParse(numericPart, out int userID))
+            {
+                return Json(Array.Empty<object>());
+            }
+
+            // get table FROM student
+            var student = db.Students
+                .FirstOrDefault(s => s.Userid == userID);
+
+            // handel empty
+            if (student == null)
+            {
+                return Json(Array.Empty<object>());
+            }
+
+            // since model has enrollment we can user it without join
+            // JOIN enrollemnt ON enrollemnt.userid = student.useris
+            var enrollments = db.Enrollments
+                .Where(e => e.Userid == student.Userid);
+
+            // use Select to return values
+            var values = enrollments
+                .Select(e => new
+                {
+                    subject = e.Class.Catalog!.Subjectabbreviation,
+                    number = e.Class.Catalog.Coursenumber,
+                    name = e.Class.Catalog.Coursename,
+                    // year display with semester EX. Fall 2026
+                    semester = e.Class.Semester,
+                    grade = e.Grade ?? "--"
+                })
+                .ToArray()
+                .Select(e =>
+                {
+                    // handel semester and year 
+                    string[] semesterParts =
+                        (e.semester ?? "").Split(
+                            ' ',
+                            StringSplitOptions.RemoveEmptyEntries
+                        );
+
+                    return new
+                    {
+                        e.subject,
+                        e.number,
+                        e.name,
+                        season = semesterParts.Length > 0
+                            ? semesterParts[0]
+                            : "",
+                        year = semesterParts.Length > 1
+                            ? semesterParts[1]
+                            : "",
+                        e.grade
+                    };
+                })
+                .ToArray();
+
+            return Json(values);
         }
 
         /// <summary>

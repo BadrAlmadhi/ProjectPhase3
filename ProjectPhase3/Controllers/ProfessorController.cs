@@ -5,17 +5,20 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProjectPhase3.Data;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
-namespace LMS.Controllers
+namespace ProjectPhase3.Controllers
 {
     //TODO: add your controller as a "primary constructor" param:
     //eg: public class ProfessorController(MyContextType myContext) 
     [Authorize(Roles = "Professor")]
-    public class ProfessorController : Controller
+    public class ProfessorController(LmsContext db) : Controller
     {
 
+        private readonly LmsContext db;
+        
         public IActionResult Index()
         {
             return View();
