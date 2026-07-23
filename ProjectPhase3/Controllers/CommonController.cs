@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using ProjectPhase3.Data;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -11,9 +12,10 @@ namespace ProjectPhase3.Controllers
 {
     //TODO: add your controller as a "primary constructor" param:
     //eg: public class CommonController(MyContextType myContext) 
-    public class CommonController : Controller
+    public class CommonController(LmsContext db) : Controller
     {
 
+        
         /*******Begin code to modify********/
 
         /// <summary>
@@ -23,7 +25,14 @@ namespace ProjectPhase3.Controllers
         /// </summary>
         /// <returns>The JSON array</returns>
         public IActionResult GetDepartments()
-        {            
+        {
+            var departments = db.Departments;
+            departments.Select(d => new
+            {
+                name = d.Departmentname,
+                subject = d.Subjectabbreviation
+            });
+           
             return Json(null);
         }
 
