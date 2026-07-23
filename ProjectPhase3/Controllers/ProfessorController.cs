@@ -11,12 +11,9 @@ using ProjectPhase3.Data;
 
 namespace ProjectPhase3.Controllers
 {
-    //TODO: add your controller as a "primary constructor" param:
-    //eg: public class ProfessorController(MyContextType myContext) 
     [Authorize(Roles = "Professor")]
     public class ProfessorController(LmsContext db) : Controller
     {
-
         private readonly LmsContext db;
         
         public IActionResult Index()
@@ -114,6 +111,18 @@ namespace ProjectPhase3.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetStudentsInClass(string subject, int num, string season, int year)
         {
+            // var students = db.Enrollments
+            //         var class
+            //     .Where(p => p. == subject);
+            // var values = students
+            //     .Select(p => new
+            //     {
+            //         // lname = p.User.Lastname,
+            //         // fname = p.User.Firstname,
+            //         // uid = "u" + p.User.Userid
+            //     }).ToArray();
+            //
+            // return Json(values);
             return Json(null);
         }
 
