@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
-namespace LMS.Controllers
+namespace ProjectPhase3.Controllers
 {
     //TODO: add your controller as a "primary constructor" param:
     //eg: public class CommonController(MyContextType myContext) 
