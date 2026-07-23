@@ -23,18 +23,26 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ProjectPhase3.Data;
 
+
+using ProjectPhase3.Models;
+
 namespace ProjectPhase3.Areas.Identity.Pages
 {
+    
     public class RegisterModel(
         UserManager<IdentityUser> userManager,
         IUserStore<IdentityUser> userStore,
         SignInManager<IdentityUser> signInManager,
-        ILogger<RegisterModel> logger)
+        ILogger<RegisterModel> logger,
+        LmsContext lmsContext)
         : PageModel
     {
         //Use this if you're sending registration emails, which we're not
         //private readonly IUserEmailStore<IdentityUser> _emailStore;
         //private readonly IEmailSender _emailSender;
+        
+        private readonly LmsContext _lmsContext = lmsContext;
+        
 
         /*IEmailSender emailSender*/
         //_emailStore = GetEmailStore();
@@ -183,22 +191,57 @@ namespace ProjectPhase3.Areas.Identity.Pages
         /// <param name="role"></param>
         string CreateNewUser(string firstName, string lastName, DateTime DOB, string departmentAbbrev, string role)
         {
-            using (var lmsCon = new LmsContext(new DbContextOptions<LmsContext>()))
+            // create new user
+            
+            // generate a unique seven-didgit integer
+            int newUserID;
+
+            do
             {
-                var newUserData = new InputModel
-                {
-                    FirstName = firstName,
-                    LastName = lastName,
-                    DOB = DOB,
-                    Department = departmentAbbrev,
-                    Role = role
-                };
-
-                lmsCon.Add(newUserData);
-                lmsCon.SaveChanges();
-
-                return lmsCon.;
+                newUserID = Random.Shared.Next(1000000, 10000000);
             }
+            while(_lmsContext.Users.Any(u=> u.Userid == newUserID));
+            
+            // create main user record
+            var newUser = new User
+            {
+                Userid = newUserID,
+                Firstname = firstName,
+                Lastname = lastName,
+                Dob = DateOnly.FromDateTime(DOB),
+            };
+            
+            _lmsContext.Users.Add(newUser);
+
+            if (role == "Student")
+            {
+                var newStudent = new Student
+                {
+                    Userid = newUserID,
+                    Subjectabbreviation = departmentAbbrev == "None" ? null : departmentAbbrev
+                };
+                
+                _lmsContext.Students.Add(newStudent);
+            } else if (role == "Professor")
+            {
+                var newProfessor = new Professor
+                {
+                    Userid = newUserID,
+                    Subjectabbreviation = departmentAbbrev == "None" ? null : departmentAbbrev
+                };
+                    _lmsContext.Professors.Add(newProfessor);
+            } else if (role == "Administrator")
+            {
+                var newAdministrator = new Administrator
+                {
+                    Userid = newUserID
+                };
+                _lmsContext.Administrators.Add(newAdministrator);
+            }
+            
+            _lmsContext.SaveChanges();
+            
+            return "u" + newUserID;
         }
 
         /*******End code to modify********/

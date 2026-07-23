@@ -17,3 +17,4 @@ public partial class Student
 
     public virtual User User { get; set; } = null!;
 }
+
