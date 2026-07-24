@@ -392,6 +392,60 @@ namespace ProjectPhase3.Controllers
         }
 
 
+        public string GradeCalculator(double grade)
+        {
+            var letterGrade = "";
+            if (grade >= 0.92)
+            {
+                letterGrade = "A";
+            }
+            else if (grade >= 0.90)
+            {
+                letterGrade = "A-";
+            }
+            else if (grade >= 0.87)
+            {
+                letterGrade = "B+";
+            }
+            else if (grade >= 0.82)
+            {
+                letterGrade = "B";
+            }
+            else if (grade >= 0.80)
+            {
+                letterGrade = "B-";
+            }
+            else if (grade >= 0.77)
+            {
+                letterGrade = "C+";
+            }
+            else if (grade >= 0.72)
+            {
+                letterGrade = "C";
+            }
+            else if (grade >= 0.70)
+            {
+                letterGrade = "C-";
+            }
+            else if (grade >= 0.67)
+            {
+                letterGrade = "D+";
+            }
+            else if (grade >= 0.62)
+            {
+                letterGrade = "D";
+            }
+            else if (grade >= 0.60)
+            {
+                letterGrade = "D-";
+            }
+            else // if (classid[classid.Count - 1].percentage < 0.60)
+            {
+                letterGrade = "E";
+            }
+            return letterGrade;
+        }
+        
         /// <summary>
         /// Set the score of an assignment submission
         /// </summary>
@@ -437,28 +491,8 @@ namespace ProjectPhase3.Controllers
                     percentage = (double)(score / p.assignmentdata.classinfo.combo.assignments.Maxpoint)
                 }).ToList();
 
-            
-            var letterGrade = "";
-            if (studentInfo[studentInfo.Count - 1].percentage >= 0.90)
-            {
-                letterGrade = "A";
-            }
-            else if (studentInfo[studentInfo.Count - 1].percentage >= 0.80)
-            {
-                letterGrade = "B";
-            }
-            else if (studentInfo[studentInfo.Count - 1].percentage >= 0.70)
-            {
-                letterGrade = "C";
-            }
-            else if (studentInfo[studentInfo.Count - 1].percentage >= 0.60)
-            {
-                letterGrade = "D";
-            }
-            else // if (classid[classid.Count - 1].percentage < 0.60)
-            {
-                letterGrade = "F";
-            }
+
+            var letterGrade = GradeCalculator(studentInfo[studentInfo.Count - 1].percentage);
             
             if (studentInfo[studentInfo.Count - 1].classid != null)
             {
