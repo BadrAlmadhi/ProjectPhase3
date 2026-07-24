@@ -108,15 +108,15 @@ namespace ProjectPhase3.Controllers
         public IActionResult GetCourses(string subject)
         {
             var courses = db.Courses
-                .Where(c => c.Subjectabbreviation == subject);
-            var values = courses
+                .Where(c => c.Subjectabbreviation == subject)
                 .Select(c => new
                 {
                     number = c.Coursenumber,
                     name = c.Coursename
-                }).ToArray();
-            
-            return Json(values);
+                })
+                .ToArray();
+    
+            return Json(courses);
         }
 
         /// <summary>

@@ -86,28 +86,35 @@ namespace ProjectPhase3.Controllers
         public IActionResult GetClassOfferings(string subject, int number)
         {
             var classes = db.Classes
-                .Where(c => c.Catalog.Subjectabbreviation == subject &&
-                            c.Catalog.Coursenumber == number).ToArray();
-                
-                var classes1 = classes
-                .Select(c =>
+                .Join(db.Courses,
+                    c => c.Catalogid,
+                    co => co.Catalogid,
+                    (c, co) => new { classobj = c, course = co })
+                .Join(db.Users,
+                    combo => combo.classobj.Professorid,
+                    u => u.Userid,
+                    (combo, u) => new { combo, professor = u })
+                .Where(p => p.combo.course.Subjectabbreviation == subject &&
+                            p.combo.course.Coursenumber == number)
+                .ToArray()  // Execute query first
+                .Select(p =>
                 {
-                    var semesterPart = (c.Semester ?? "")
+                    var semesterPart = (p.combo.classobj.Semester ?? "")
                         .Split(' ', StringSplitOptions.RemoveEmptyEntries);
                     return new
                     {
                         season = semesterPart.Length > 0 ? semesterPart[0] : "",
                         year = semesterPart.Length > 1 ? semesterPart[1] : "",
-                        location = c.Location,
-                        start = c.Starttime?.ToString("yyyy-MM-dd HH:mm:ss"),
-                        end = c.Endtime?.ToString("yyyy-MM-dd HH:mm:ss"),
-                        fname = c.Professor.User.Firstname,
-                        lname = c.Professor.User.Lastname
+                        location = p.combo.classobj.Location,
+                        start = p.combo.classobj.Starttime.ToString(),
+                        end = p.combo.classobj.Endtime.ToString(),
+                        fname = p.professor.Firstname,
+                        lname = p.professor.Lastname
                     };
-                });
-            
-            
-            return Json(classes1);
+                })
+                .ToArray();
+    
+            return Json(classes);
         }
 
         /// <summary>
