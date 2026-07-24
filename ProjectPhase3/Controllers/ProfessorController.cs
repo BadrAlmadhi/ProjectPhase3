@@ -160,6 +160,8 @@ namespace ProjectPhase3.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetAssignmentsInCategory(string subject, int num, string season, int year, string category)
         {
+            string semester = season + " " + year;
+    
             var assignments = db.Assignments
                 .Join(db.Classes,
                     a => a.Classid,
@@ -171,7 +173,7 @@ namespace ProjectPhase3.Controllers
                     (ac, co) => new { ac.assignment, ac.classid, ac.classobj, course = co })
                 .Where(p => p.course.Coursenumber == num)
                 .Where(p => p.course.Subjectabbreviation == subject)
-                .Where(p => p.classobj.Semester == (season + year))
+                .Where(p => p.classobj.Semester == semester)
                 .Where(p => p.assignment.Assignmentname != null)
                 .Where(p => category == null || p.assignment.Categorynames == category)
                 .Select(p => new
@@ -181,7 +183,6 @@ namespace ProjectPhase3.Controllers
                     due = p.assignment.Duedate,
                     submissions = db.Submissions.Count(s => s.Assignmentid == p.assignment.Assignmentid && s.Classid == p.classid)
                 })
-                .Distinct()
                 .ToArray();
     
             return Json(assignments);
@@ -202,25 +203,27 @@ namespace ProjectPhase3.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetAssignmentCategories(string subject, int num, string season, int year)
         {
+            string semester = season + " " + year;
+    
             var assignmentcats = db.Assignmentcategories
                 .Join(db.Classes,
-                    assignmentcat => assignmentcat.Classid,
-                    classes => classes.Classid,
-                    (assignments, classes) => new { assignments, classes })
+                    ac => ac.Classid,
+                    c => c.Classid,
+                    (ac, c) => new { category = ac, classobj = c })
                 .Join(db.Courses,
-                    combo => combo.classes.Catalogid,
-                    courses => courses.Catalogid,
-                    (combo, courses) => new
-                    { combo, courses })
-                .Where(p => p.courses.Coursenumber == num)
-                .Where(p => p.courses.Subjectabbreviation == subject)
-                .Where(p => p.combo.classes.Semester != null && p.combo.classes.Semester.StartsWith(season))
-                .Where(p => p.combo.classes.Semester != null && p.combo.classes.Semester.EndsWith(year.ToString()))
+                    combo => combo.classobj.Catalogid,
+                    co => co.Catalogid,
+                    (combo, co) => new { combo, course = co })
+                .Where(p => p.course.Coursenumber == num)
+                .Where(p => p.course.Subjectabbreviation == subject)
+                .Where(p => p.combo.classobj.Semester == semester)
                 .Select(p => new
                 {
-                    cname = p.combo.assignments.Categorynames,
-                    weight = p.combo.assignments.Gradingweight
-                }).ToArray();
+                    name = p.combo.category.Categorynames,
+                    weight = p.combo.category.Gradingweight
+                })
+                .ToArray();
+        
             return Json(assignmentcats);
         }
 
@@ -239,24 +242,22 @@ namespace ProjectPhase3.Controllers
         {
             try
             {
-                // Validate inputs
                 if (string.IsNullOrWhiteSpace(category) || catweight < 0 || catweight > 100)
                 {
                     return Json(new { success = false, error = "Invalid category name or weight" });
                 }
+
+                string semester = season + " " + year;
 
                 var classInfo = db.Courses
                     .Join(db.Classes,
                         courses => courses.Catalogid,
                         classes => classes.Catalogid,
                         (courses, classes) => new { courses, classes })
-                    .Where(p => p.classes.Semester == (season + year))
+                    .Where(p => p.classes.Semester == semester)
                     .Where(p => p.courses.Subjectabbreviation == subject)
                     .Where(p => p.courses.Coursenumber == num)
-                    .Select(p => new
-                    {
-                        classid = p.classes.Classid
-                    })
+                    .Select(p => new { classid = p.classes.Classid })
                     .FirstOrDefault();
 
                 if (classInfo == null)
@@ -264,7 +265,6 @@ namespace ProjectPhase3.Controllers
                     return Json(new { success = false, error = "Class not found" });
                 }
 
-                // Check if category already exists
                 var existingCategory = db.Assignmentcategories
                     .FirstOrDefault(ac => ac.Categorynames == category && ac.Classid == classInfo.classid);
 
@@ -317,7 +317,7 @@ namespace ProjectPhase3.Controllers
                         courses => courses.Catalogid,
                         classes => classes.Catalogid,
                         (courses, classes) => new { courses, classes })
-                    .Where(p => p.classes.Semester == (season + year))
+                    .Where(p => p.classes.Semester == (season + " " + year))
                     .Where(p => p.courses.Subjectabbreviation == subject)
                     .Where(p => p.courses.Coursenumber == num)
                     .Select(p => new
@@ -414,7 +414,7 @@ namespace ProjectPhase3.Controllers
                     assignmentdata => assignmentdata.classinfo.combo.subs.Userid,
                     students => students.Userid,
                     (assignmentdata, students) => new { assignmentdata, students })
-                .Where(p => p.assignmentdata.classinfo.classes.Semester == (season + year))
+                .Where(p => p.assignmentdata.classinfo.classes.Semester == (season + " " + year))
                 .Where(p => p.assignmentdata.courses.Subjectabbreviation == subject)
                 .Where(p => p.assignmentdata.courses.Coursenumber == num)
                 .Where(p => p.assignmentdata.classinfo.combo.assignments.Categorynames == category)
