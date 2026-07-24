@@ -297,44 +297,70 @@ namespace ProjectPhase3.Controllers
         /// <returns>A JSON object containing success = true/false</returns>
         public IActionResult CreateAssignment(string subject, int num, string season, int year, string category, string asgname, int asgpoints, DateTime asgdue, string asgcontents)
         {
-            var classid = db.Courses
-                .Join(db.Classes,
-                    courses => courses.Catalogid,
-                    classes => classes.Catalogid,
-                    (courses, classes) => new { courses, classes })
-                .Where(p => p.classes.Semester == (season + year))
-                .Where(p => p.courses.Subjectabbreviation == subject)
-                .Where(p => p.courses.Coursenumber == num)
-                .Select(p => new
-                {
-                    classid = p.classes.Classid
-                }).ToString();
-
-            if (classid != null)
+            try
             {
-                var newAssignment = new Assignment
-                {
-                    Categorynames = category,
-                    Maxpoint =  asgpoints,
-                    Assignmentname = asgname,
-                    Duedate = asgdue,
-                    Content =  asgcontents,
-                    Classid = int.Parse(classid)
-                };
+                var classInfo = db.Courses
+                    .Join(db.Classes,
+                        courses => courses.Catalogid,
+                        classes => classes.Catalogid,
+                        (courses, classes) => new { courses, classes })
+                    .Where(p => p.classes.Semester == (season + year))
+                    .Where(p => p.courses.Subjectabbreviation == subject)
+                    .Where(p => p.courses.Coursenumber == num)
+                    .Select(p => new
+                    {
+                        classid = p.classes.Classid
+                    })
+                    .FirstOrDefault();
 
-                try
-                {
-                    db.Assignments.Add(newAssignment);
-                    db.SaveChanges();
-                
-                    return Json(new { success = true});
-                }
-                catch (DbUpdateException e)
+                if (classInfo == null)
                 {
                     return Json(new { success = false });
                 }
+
+                int classid = classInfo.classid;
+
+                // Create new assignment
+                var newAssignment = new Assignment
+                {
+                    Categorynames = category,
+                    Maxpoint = asgpoints,
+                    Assignmentname = asgname,
+                    Duedate = asgdue,
+                    Content = asgcontents,
+                    Classid = classid
+                };
+
+                db.Assignments.Add(newAssignment);
+                db.SaveChanges();
+
+                // Recalculate grades for all students in this class
+                var enrolledStudents = db.Enrollments
+                    .Where(e => e.Classid == classid)
+                    .Select(e => e.Userid)
+                    .Distinct()
+                    .ToList();
+
+                foreach (var studentid in enrolledStudents)
+                {
+                    var enrollment = db.Enrollments
+                        .FirstOrDefault(e => e.Userid == studentid && e.Classid == classid);
+                    
+                    if (enrollment != null)
+                    {
+                        var updatedGrade = CalculateStudentClassGrade(studentid, classid);
+                        enrollment.Grade = updatedGrade;
+                    }
+                }
+                
+                db.SaveChanges();
+
+                return Json(new { success = true });
             }
-            return Json(new { success = false });
+            catch (DbUpdateException e)
+            {
+                return Json(new { success = false });
+            }
         }
 
 
@@ -445,6 +471,74 @@ namespace ProjectPhase3.Controllers
             }
             return letterGrade;
         }
+
+        private string CalculateStudentClassGrade(int userid, int classid)
+        {
+            // Get all submissions for this student in this class
+            var submissions = db.Submissions
+                .Where(sub => sub.Userid == userid && sub.Classid == classid)
+                .Join(db.Assignments,
+                    sub => sub.Assignmentid,
+                    asg => asg.Assignmentid,
+                    (sub, asg) => new { sub, asg })
+                .Where(p => p.asg.Classid == classid) // Filter by class after join
+                .Where(p => p.sub.Score.HasValue && p.asg.Maxpoint.HasValue)
+                .Select(p => new
+                {
+                    score = (double)p.sub.Score.Value,
+                    maxpoints = (double)p.asg.Maxpoint.Value,
+                    category = p.asg.Categorynames
+                })
+                .ToList();
+
+            if (!submissions.Any())
+            {
+                return "N/A"; // No submissions yet
+            }
+
+            // Group by category and calculate average for each
+            var categoryAverages = submissions
+                .GroupBy(s => s.category)
+                .Select(g => new
+                {
+                    category = g.Key,
+                    average = g.Average(s => s.score / s.maxpoints)
+                })
+                .ToDictionary(x => x.category, x => x.average);
+
+            // Get category weights from AssignmentCategories table for this class
+            var categoryWeights = db.Assignmentcategories
+                .Where(ac => ac.Classid == classid)
+                .ToDictionary(ac => ac.Categorynames, ac => (ac.Gradingweight ?? 0) / 100.0);
+
+            // Calculate weighted average
+            double weightedAverage = 0;
+            double totalWeight = 0;
+
+            foreach (var category in categoryAverages)
+            {
+                if (categoryWeights.TryGetValue(category.Key, out var weight))
+                {
+                    weightedAverage += category.Value * weight;
+                    totalWeight += weight;
+                }
+            }
+
+            // Normalize if not all categories are present
+            if (totalWeight > 0)
+            {
+                weightedAverage /= totalWeight;
+            }
+            else
+            {
+                return "N/A"; // No valid categories with weights
+            }
+
+            // Convert to letter grade
+            return GradeCalculator(weightedAverage);
+        }
+
+        // Normalize if not all categories
         
         /// <summary>
         /// Set the score of an assignment submission
@@ -460,62 +554,66 @@ namespace ProjectPhase3.Controllers
         /// <returns>A JSON object containing success = true/false</returns>
         public IActionResult GradeSubmission(string subject, int num, string season, int year, string category, string asgname, string uid, int score)
         {
-            var studentInfo = db.Assignments
-                .Join(db.Submissions,
-                    assignmentcat => assignmentcat.Assignmentid,
-                    subs => subs.Assignmentid,
-                    (assignments, subs) => new { assignments, subs })
-                .Join(db.Classes,
-                    combo => combo.subs.Classid,
-                    classes => classes.Classid,
-                    (combo, classes) => new
-                        { combo, classes })
-                .Join(db.Courses,
-                    classinfo => classinfo.classes.Catalogid,
-                    courses => courses.Catalogid,
-                    (classinfo, courses) => new { classinfo, courses })
-                .Join(db.Users,
-                    assignmentdata => assignmentdata.classinfo.combo.subs.Userid,
-                    students => students.Userid,
-                    (assignmentdata, students) => new { assignmentdata, students })
-                .Where(p => p.assignmentdata.classinfo.classes.Semester == (season + year))
-                .Where(p => p.assignmentdata.courses.Subjectabbreviation == subject)
-                .Where(p => p.assignmentdata.courses.Coursenumber == num)
-                .Where(p => p.assignmentdata.classinfo.combo.assignments.Assignmentname == asgname)
-                .Where(p => p.assignmentdata.classinfo.combo.assignments.Categorynames == category)
-                .Select(p => new
-                {
-                    // assignmentid = p.assignmentdata.classinfo.combo.assignments.Assignmentid,
-                    classid = p.assignmentdata.classinfo.combo.assignments.Classid,
-                    // total = p.assignmentdata.classinfo.combo.assignments.Maxpoint,
-                    percentage = (double)(score / p.assignmentdata.classinfo.combo.assignments.Maxpoint)
-                }).ToList();
-
-
-            var letterGrade = GradeCalculator(studentInfo[studentInfo.Count - 1].percentage);
-            
-            if (studentInfo[studentInfo.Count - 1].classid != null)
+            try
             {
-                var newGrade = new Enrollment
-                {
-                    Userid = int.Parse(uid),
-                    Grade = letterGrade,
-                    Classid = studentInfo[studentInfo.Count - 1].classid
-                };
+                var assignmentInfo = db.Assignments
+                    .Join(db.Classes,
+                        a => a.Classid,
+                        c => c.Classid,
+                        (a, c) => new { assignment = a, classid = c.Classid })
+                    .Join(db.Courses,
+                        ac => ac.classid,
+                        co => co.Catalogid,
+                        (ac, co) => new { ac.assignment, ac.classid, course = co })
+                    .Where(p => p.course.Subjectabbreviation == subject)
+                    .Where(p => p.course.Coursenumber == num)
+                    .Where(p => p.assignment.Assignmentname == asgname)
+                    .Where(p => p.assignment.Categorynames == category)
+                    .Select(p => new
+                    {
+                        assignmentid = p.assignment.Assignmentid,
+                        classid = p.classid,
+                        maxpoint = p.assignment.Maxpoint
+                    })
+                    .FirstOrDefault();
 
-                try
-                {
-                    db.Enrollments.Add(newGrade);
-                    db.SaveChanges();
-                
-                    return Json(new { success = true});
-                }
-                catch (DbUpdateException e)
+                if (assignmentInfo == null || assignmentInfo.maxpoint == null)
                 {
                     return Json(new { success = false });
                 }
+
+                int userid = int.Parse(uid);
+                
+                // Create and save submission
+                var newSub = new Submission
+                {
+                    Assignmentid = assignmentInfo.assignmentid,
+                    Userid = userid,
+                    Score = score,
+                    Classid = assignmentInfo.classid,
+                    Submissiontime = DateTime.Now
+                };
+                
+                db.Submissions.Add(newSub);
+                db.SaveChanges();
+
+                // Recalculate student's overall grade
+                var enrollmentRecord = db.Enrollments
+                    .FirstOrDefault(e => e.Userid == userid && e.Classid == assignmentInfo.classid);
+
+                if (enrollmentRecord != null)
+                {
+                    var overallGrade = CalculateStudentClassGrade(userid, assignmentInfo.classid);
+                    enrollmentRecord.Grade = overallGrade;
+                    db.SaveChanges();
+                }
+            
+                return Json(new { success = true });
             }
-            return Json(new { success = false });
+            catch (Exception e)
+            {
+                return Json(new { success = false });
+            }
         }
 
 
