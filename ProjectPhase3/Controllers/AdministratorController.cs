@@ -197,12 +197,29 @@ namespace ProjectPhase3.Controllers
         /// true otherwise.</returns>
         public IActionResult CreateClass(string subject, int number, string season, int year, DateTime start, DateTime end, string location, string instructor)
         {
-            string semester = season + " " + year;
+
+            if (string.IsNullOrWhiteSpace(subject) ||
+                string.IsNullOrWhiteSpace(season) ||
+                string.IsNullOrWhiteSpace(location) ||
+                string.IsNullOrWhiteSpace(instructor))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "All fields are required."
+                });
+            }
+            
+            string semester = $"{season} {year}";
             // fix profosser id number without U
             string numericPart = instructor.TrimStart('u', 'U');
             if (!int.TryParse(numericPart, out int professorID))
             {
-                return Json(new { success = false });
+                return Json(new
+                {
+                    success = false,
+                    message = "Invalid professor ID."
+                });
             }
 
             // return the course
@@ -212,7 +229,7 @@ namespace ProjectPhase3.Controllers
 
             if (courses == null)
             {
-                return Json(new { success = false });
+                return Json(new { success = false,  message = "Course not found." });
             }
 
             // check if course exists
@@ -222,18 +239,30 @@ namespace ProjectPhase3.Controllers
 
             if (sameCourseExists)
             {
-                return Json(new { success = false });
+                return Json(new { success = false, message = "Course already exists." });
+            }
+            
+            TimeOnly startTime = TimeOnly.FromDateTime(start);
+            TimeOnly endTime = TimeOnly.FromDateTime(end);
+            
+            if (endTime <= startTime)
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "End time must be after start time."
+                });
             }
 
             bool locationConflict = db.Classes.Any(c =>
                 c.Location == location &&
                 c.Semester == semester &&
-                c.Starttime < TimeOnly.FromDateTime(end) &&
-                c.Endtime > TimeOnly.FromDateTime(start));
+                c.Starttime < endTime &&
+                c.Endtime > startTime);
 
             if (locationConflict)
             {
-                return Json(new { success = false });
+                return Json(new { success = false, message = "Location conflict." });
             }
 
             var newClass = new Class
@@ -241,8 +270,8 @@ namespace ProjectPhase3.Controllers
                 Catalogid = courses.Catalogid,
                 Semester = semester,
                 Location = location,
-                Starttime = TimeOnly.FromDateTime(start),
-                Endtime = TimeOnly.FromDateTime(end),
+                Starttime = startTime,
+                Endtime = endTime,
                 Professorid = professorID,
             };
             
@@ -254,7 +283,7 @@ namespace ProjectPhase3.Controllers
             }
             catch (DbUpdateException e)
             {
-                return Json(new { success = false });
+                return Json(new { success = false, message = "The class not be saved" });
             }
         }
 
