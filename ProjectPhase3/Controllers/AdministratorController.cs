@@ -185,7 +185,7 @@ namespace ProjectPhase3.Controllers
                 return Json(new { success = false });
             }
 
-            // check if course exsist 
+            // check if course exists
             bool sameCourseExists = db.Classes.Any(c =>
                 c.Catalogid == courses.Catalogid &&
                 c.Semester == semester);
@@ -198,8 +198,8 @@ namespace ProjectPhase3.Controllers
             bool locationConflict = db.Classes.Any(c =>
                 c.Location == location &&
                 c.Semester == semester &&
-                c.Starttime < end &&
-                c.Endtime > start);
+                c.Starttime < TimeOnly.FromDateTime(end) &&
+                c.Endtime > TimeOnly.FromDateTime(start));
 
             if (locationConflict)
             {
@@ -211,8 +211,8 @@ namespace ProjectPhase3.Controllers
                 Catalogid = courses.Catalogid,
                 Semester = semester,
                 Location = location,
-                Starttime = start,
-                Endtime = end,
+                Starttime = TimeOnly.FromDateTime(start),
+                Endtime = TimeOnly.FromDateTime(end),
                 Professorid = professorID,
             };
             

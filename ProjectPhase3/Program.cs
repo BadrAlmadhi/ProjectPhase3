@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using ProjectPhase3.Areas.Identity.Data;
 using ProjectPhase3.Data;
 
+System.AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // LMS1: courses, students, assignments, enrollments, etc.
