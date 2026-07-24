@@ -111,7 +111,6 @@ namespace ProjectPhase3.Controllers
                 }).ToArray();
             
             return Json(values);
-            
         }
 
 
