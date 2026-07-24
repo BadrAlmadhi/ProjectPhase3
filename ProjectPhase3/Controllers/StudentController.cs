@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProjectPhase3.Data;
+using ProjectPhase3.Models;
 
 // For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -84,8 +85,14 @@ namespace ProjectPhase3.Controllers
             // we dont need to use varification because we already have     [Authorize(Roles = "Student")]
 
             // remove the u so we can check only number
+            if (string.IsNullOrWhiteSpace(uid))
+            {
+                return Json(Array.Empty<object>());
+            }
+            
             string numericPart = uid.TrimStart('u', 'U');
 
+            
             // now we check only number
             if (!int.TryParse(numericPart, out int userID))
             {
@@ -162,8 +169,56 @@ namespace ProjectPhase3.Controllers
         /// <param name="uid"></param>
         /// <returns>The JSON array</returns>
         public IActionResult GetAssignmentsInClass(string subject, int num, string season, int year, string uid)
-        {            
-            return Json(null);
+        {
+            if (string.IsNullOrWhiteSpace(uid) || !int.TryParse(uid.TrimStart('u', 'U'), out int userID))
+            {
+                return Json(Array.Empty<object>());
+            }
+
+            string semester = season + " " + year;
+
+            var classInfo = db.Classes.FirstOrDefault(c => 
+                c.Catalog.Subjectabbreviation == subject &&
+                c.Catalog.Coursenumber == num &&
+                c.Semester == semester);
+
+            if (classInfo == null)
+            {
+                return Json(Array.Empty<object>());
+            }
+            
+            bool enrolled = db.Enrollments.Any(e => 
+                e.Userid == userID && 
+                e.Classid == classInfo.Classid);
+
+            if (!enrolled)
+            {
+                return Json(Array.Empty<object>());
+            }
+
+            var assignments = db.Assignments
+                .Where(a => a.Assignmentcategory != null &&
+                            a.Assignmentcategory.Classid == classInfo.Classid).ToArray();
+
+            var Submissions = db.Submissions
+                .Where(s => s.Userid == userID &&
+                            s.Classid == classInfo.Classid).ToArray();
+            
+            var result = assignments.Select(a =>
+            {
+                var submisstion =  Submissions.FirstOrDefault(s => s.Assignmentid == a.Assignmentid);
+
+                return new
+                {
+                    aname = a.Assignmentname,
+                    cname = a.Categorynames,
+                    due = a.Duedate,
+                    score = submisstion?.Score
+                };
+            }).ToArray();
+            
+            
+            return Json(result);
         }
 
 
@@ -188,7 +243,67 @@ namespace ProjectPhase3.Controllers
         public IActionResult SubmitAssignmentText(string subject, int num, string season, int year,
           string category, string asgname, string uid, string contents)
         {           
-            return Json(new { success = false });
+            if (string.IsNullOrWhiteSpace(uid) ||
+                !int.TryParse(uid.TrimStart('u', 'U'), out int userId))
+            {
+                return Json(new { success = false });
+            }
+
+            string semester = season + " " + year;
+
+            var assignment = db.Assignments.FirstOrDefault(a =>
+                a.Assignmentname == asgname &&
+                a.Categorynames == category &&
+                a.Assignmentcategory != null &&
+                a.Assignmentcategory.Class.Semester == semester &&
+                a.Assignmentcategory.Class.Catalog.Subjectabbreviation == subject &&
+                a.Assignmentcategory.Class.Catalog.Coursenumber == num);
+
+            if (assignment == null || assignment.Assignmentcategory == null)
+            {
+                return Json(new { success = false });
+            }
+
+            int classId = assignment.Assignmentcategory.Classid;
+
+            bool enrolled = db.Enrollments.Any(e =>
+                e.Userid == userId &&
+                e.Classid == classId);
+
+            if (!enrolled)
+            {
+                return Json(new { success = false });
+            }
+
+            var submission = db.Submissions.FirstOrDefault(s =>
+                s.Assignmentid == assignment.Assignmentid &&
+                s.Userid == userId);
+
+            if (submission == null)
+            {
+                submission = new Submission
+                {
+                    Assignmentid = assignment.Assignmentid,
+                    Userid = userId,
+                    Classid = classId,
+                    Submissioncontents = contents,
+                    Submissiontime = DateTime.Now,
+                    Score = 0
+                };
+
+                db.Submissions.Add(submission);
+            }
+            else
+            {
+                // Resubmitting changes contents and time only.
+                // The existing score remains unchanged.
+                submission.Submissioncontents = contents;
+                submission.Submissiontime = DateTime.Now;
+            }
+
+            db.SaveChanges();
+
+            return Json(new { success = true });
         }
 
 
@@ -203,8 +318,47 @@ namespace ProjectPhase3.Controllers
         /// <returns>A JSON object containing {success = {true/false}. 
         /// false if the student is already enrolled in the class, true otherwise.</returns>
         public IActionResult Enroll(string subject, int num, string season, int year, string uid)
-        {          
-            return Json(new { success = false});
+        {
+            if (string.IsNullOrWhiteSpace(uid) || !int.TryParse(uid.TrimStart('u', 'U'), out int userId))
+            {
+                return Json(new { success = false });
+            }
+
+            bool studentExists = db.Students.Any(s => s.Userid == userId);
+            if (!studentExists)
+            {
+                return Json(new { success = false });
+            }
+            
+            string semester = season + " " + year;
+
+            var classInfo = db.Classes.FirstOrDefault(c => 
+                c.Catalog.Subjectabbreviation == subject &&
+                c.Catalog.Coursenumber == num &&
+                c.Semester == semester);
+
+            if (classInfo == null)
+            {
+                return Json(new { success = false });
+            }
+            
+            bool alreadyEnrolled = db.Enrollments.Any(e => e.Userid == userId && e.Classid == classInfo.Classid);
+            if (alreadyEnrolled)
+            {
+                return Json(new { success = false });
+            }
+            
+            var enrollment = new Enrollment
+            {
+                Userid = userId,
+                Classid = classInfo.Classid,
+                Grade = null
+            };
+            
+            db.Enrollments.Add(enrollment);
+            db.SaveChanges();
+            
+            return Json(new { success = true});
         }
 
 
@@ -221,8 +375,60 @@ namespace ProjectPhase3.Controllers
         /// <param name="uid">The uid of the student</param>
         /// <returns>A JSON object containing a single field called "gpa" with the number value</returns>
         public IActionResult GetGPA(string uid)
-        {            
-            return Json(null);
+        {
+            if (string.IsNullOrWhiteSpace(uid) ||
+                !int.TryParse(uid.TrimStart('u', 'U'), out int userId))
+            {
+                return Json(new { gpa = 0.0 });
+            }
+
+            var grades = db.Enrollments
+                .Where(e =>
+                    e.Userid == userId &&
+                    e.Grade != null &&
+                    e.Grade != "--")
+                .Select(e => e.Grade!)
+                .ToArray();
+
+            if (grades.Length == 0)
+            {
+                return Json(new { gpa = 0.0 });
+            }
+
+            var gradePoints = new Dictionary<string, double>(
+                StringComparer.OrdinalIgnoreCase)
+            {
+                ["A"]  = 4.0,
+                ["A-"] = 3.7,
+                ["B+"] = 3.3,
+                ["B"]  = 3.0,
+                ["B-"] = 2.7,
+                ["C+"] = 2.3,
+                ["C"]  = 2.0,
+                ["C-"] = 1.7,
+                ["D+"] = 1.3,
+                ["D"]  = 1.0,
+                ["D-"] = 0.7,
+                ["E"]  = 0.0,
+                ["F"]  = 0.0
+            };
+
+            var validPoints = grades
+                .Where(g => gradePoints.ContainsKey(g.Trim()))
+                .Select(g => gradePoints[g.Trim()])
+                .ToArray();
+
+            if (validPoints.Length == 0)
+            {
+                return Json(new { gpa = 0.0 });
+            }
+
+            double gpa = validPoints.Average();
+
+            return Json(new
+            {
+                gpa = Math.Round(gpa, 2)
+            });
         }
                 
         /*******End code to modify********/
