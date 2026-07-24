@@ -406,6 +406,81 @@ namespace ProjectPhase3.Controllers
         /// <returns>A JSON object containing success = true/false</returns>
         public IActionResult GradeSubmission(string subject, int num, string season, int year, string category, string asgname, string uid, int score)
         {
+            var studentInfo = db.Assignments
+                .Join(db.Submissions,
+                    assignmentcat => assignmentcat.Assignmentid,
+                    subs => subs.Assignmentid,
+                    (assignments, subs) => new { assignments, subs })
+                .Join(db.Classes,
+                    combo => combo.subs.Classid,
+                    classes => classes.Classid,
+                    (combo, classes) => new
+                        { combo, classes })
+                .Join(db.Courses,
+                    classinfo => classinfo.classes.Catalogid,
+                    courses => courses.Catalogid,
+                    (classinfo, courses) => new { classinfo, courses })
+                .Join(db.Users,
+                    assignmentdata => assignmentdata.classinfo.combo.subs.Userid,
+                    students => students.Userid,
+                    (assignmentdata, students) => new { assignmentdata, students })
+                .Where(p => p.assignmentdata.classinfo.classes.Semester == (season + year))
+                .Where(p => p.assignmentdata.courses.Subjectabbreviation == subject)
+                .Where(p => p.assignmentdata.courses.Coursenumber == num)
+                .Where(p => p.assignmentdata.classinfo.combo.assignments.Assignmentname == asgname)
+                .Where(p => p.assignmentdata.classinfo.combo.assignments.Categorynames == category)
+                .Select(p => new
+                {
+                    // assignmentid = p.assignmentdata.classinfo.combo.assignments.Assignmentid,
+                    classid = p.assignmentdata.classinfo.combo.assignments.Classid,
+                    // total = p.assignmentdata.classinfo.combo.assignments.Maxpoint,
+                    percentage = (double)(score / p.assignmentdata.classinfo.combo.assignments.Maxpoint)
+                }).ToList();
+
+            
+            var letterGrade = "";
+            if (studentInfo[studentInfo.Count - 1].percentage >= 0.90)
+            {
+                letterGrade = "A";
+            }
+            else if (studentInfo[studentInfo.Count - 1].percentage >= 0.80)
+            {
+                letterGrade = "B";
+            }
+            else if (studentInfo[studentInfo.Count - 1].percentage >= 0.70)
+            {
+                letterGrade = "C";
+            }
+            else if (studentInfo[studentInfo.Count - 1].percentage >= 0.60)
+            {
+                letterGrade = "D";
+            }
+            else // if (classid[classid.Count - 1].percentage < 0.60)
+            {
+                letterGrade = "F";
+            }
+            
+            if (studentInfo[studentInfo.Count - 1].classid != null)
+            {
+                var newGrade = new Enrollment
+                {
+                    Userid = int.Parse(uid),
+                    Grade = letterGrade,
+                    Classid = studentInfo[studentInfo.Count - 1].classid
+                };
+
+                try
+                {
+                    db.Enrollments.Add(newGrade);
+                    db.SaveChanges();
+                
+                    return Json(new { success = true});
+                }
+                catch (DbUpdateException e)
+                {
+                    return Json(new { success = false });
+                }
+            }
             return Json(new { success = false });
         }
 
@@ -423,7 +498,6 @@ namespace ProjectPhase3.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetMyClasses(string uid)
         {
-
             var classes = db.Classes
                 .Join(db.Courses,
                     classes => classes.Catalogid,
