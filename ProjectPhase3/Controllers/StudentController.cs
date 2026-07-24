@@ -240,71 +240,77 @@ namespace ProjectPhase3.Controllers
         /// <param name="uid">The student submitting the assignment</param>
         /// <param name="contents">The text contents of the student's submission</param>
         /// <returns>A JSON object containing {success = true/false}</returns>
-        public IActionResult SubmitAssignmentText(string subject, int num, string season, int year,
-          string category, string asgname, string uid, string contents)
+        public IActionResult SubmitAssignmentText(string subject, int num, string season, int year, string category, string asgname, string uid, string contents)
         {           
-            if (string.IsNullOrWhiteSpace(uid) ||
-                !int.TryParse(uid.TrimStart('u', 'U'), out int userId))
+            // 1. Safe input parsing
+            if (string.IsNullOrWhiteSpace(uid) || !int.TryParse(uid.TrimStart('u', 'U'), out int userId))
             {
                 return Json(new { success = false });
             }
 
-            string semester = season + " " + year;
+            string semester = $"{season} {year}";
 
-            var assignment = db.Assignments.FirstOrDefault(a =>
-                a.Assignmentname == asgname &&
-                a.Categorynames == category &&
-                a.Assignmentcategory != null &&
-                a.Assignmentcategory.Class.Semester == semester &&
-                a.Assignmentcategory.Class.Catalog.Subjectabbreviation == subject &&
-                a.Assignmentcategory.Class.Catalog.Coursenumber == num);
-
-            if (assignment == null || assignment.Assignmentcategory == null)
+            try
             {
-                return Json(new { success = false });
-            }
+                // 2. Single-pass query: Validates assignment path AND confirms student enrollment
+                var assignmentDetails = db.Assignments
+                    .Where(a => a.Assignmentname == asgname &&
+                                a.Categorynames == category &&
+                                a.Assignmentcategory != null &&
+                                a.Assignmentcategory.Class.Semester == semester &&
+                                a.Assignmentcategory.Class.Catalog.Subjectabbreviation == subject &&
+                                a.Assignmentcategory.Class.Catalog.Coursenumber == num &&
+                                db.Enrollments.Any(e => e.Userid == userId && e.Classid == a.Assignmentcategory.Classid))
+                    .Select(a => new 
+                    {
+                        AssignmentId = a.Assignmentid,
+                        ClassId = a.Assignmentcategory.Classid
+                    })
+                    .FirstOrDefault();
 
-            int classId = assignment.Assignmentcategory.Classid;
-
-            bool enrolled = db.Enrollments.Any(e =>
-                e.Userid == userId &&
-                e.Classid == classId);
-
-            if (!enrolled)
-            {
-                return Json(new { success = false });
-            }
-
-            var submission = db.Submissions.FirstOrDefault(s =>
-                s.Assignmentid == assignment.Assignmentid &&
-                s.Userid == userId);
-
-            if (submission == null)
-            {
-                submission = new Submission
+                // If assignment path doesn't exist OR student isn't enrolled, reject immediately
+                if (assignmentDetails == null)
                 {
-                    Assignmentid = assignment.Assignmentid,
-                    Userid = userId,
-                    Classid = classId,
-                    Submissioncontents = contents,
-                    Submissiontime = DateTime.Now,
-                    Score = 0
-                };
+                    return Json(new { success = false });
+                }
 
-                db.Submissions.Add(submission);
+                // 3. Locate existing submission or upsert a new one
+                var submission = db.Submissions.FirstOrDefault(s =>
+                    s.Assignmentid == assignmentDetails.AssignmentId &&
+                    s.Userid == userId);
+
+                if (submission == null)
+                {
+                    // Initial submission setup
+                    submission = new Submission
+                    {
+                        Assignmentid = assignmentDetails.AssignmentId,
+                        Userid = userId,
+                        Classid = assignmentDetails.ClassId,
+                        Submissioncontents = contents,
+                        Submissiontime = DateTime.Now,
+                        Score = 0
+                    };
+                    db.Submissions.Add(submission);
+                }
+                else
+                {
+                    // Update submission criteria while preserving score
+                    submission.Submissioncontents = contents;
+                    submission.Submissiontime = DateTime.Now;
+                }
+
+                // 4. Save changes safely wrapped inside our try block
+                db.SaveChanges();
+                return Json(new { success = true });
             }
-            else
+            catch (Exception)
             {
-                // Resubmitting changes contents and time only.
-                // The existing score remains unchanged.
-                submission.Submissioncontents = contents;
-                submission.Submissiontime = DateTime.Now;
+                // Catches unexpected database dropouts, constraint failures, or connection timeouts
+                return Json(new { success = false });
             }
-
-            db.SaveChanges();
-
-            return Json(new { success = true });
         }
+
 
 
         /// <summary>
