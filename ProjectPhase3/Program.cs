@@ -6,6 +6,7 @@ using ProjectPhase3.Data;
 System.AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
+var connectionString = builder.Configuration.GetConnectionString("IdentityContextConnection") ?? throw new InvalidOperationException("Connection string 'IdentityContextConnection' not found.");;
 
 // LMS1: courses, students, assignments, enrollments, etc.
 var lmsConnectionString =
