@@ -26,6 +26,7 @@ namespace ProjectPhase3.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetDepartments()
         {
+            
             var departments = db.Departments
             .Select(d => new
             {
@@ -50,8 +51,22 @@ namespace ProjectPhase3.Controllers
         /// </summary>
         /// <returns>The JSON array</returns>
         public IActionResult GetCatalog()
-        {            
-            return Json(null);
+        {
+            var departments = db.Departments
+                .Select(d => new
+                {
+                    subject = d.Subjectabbreviation,
+                    dname = d.Departmentname,
+                    courses = d.Courses
+                        .Select(c => new
+                        {
+                            number = c.Coursenumber,
+                            cname = c.Coursename
+                        }).ToArray()
+                })
+                .ToArray();
+            
+            return Json(departments);
         }
 
         /// <summary>
@@ -69,8 +84,30 @@ namespace ProjectPhase3.Controllers
         /// <param name="number">The course number, as in 5530</param>
         /// <returns>The JSON array</returns>
         public IActionResult GetClassOfferings(string subject, int number)
-        {            
-            return Json(null);
+        {
+            var classes = db.Classes
+                .Where(c => c.Catalog.Subjectabbreviation == subject &&
+                            c.Catalog.Coursenumber == number).ToArray();
+                
+                var classes1 = classes
+                .Select(c =>
+                {
+                    var semesterPart = (c.Semester ?? "")
+                        .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    return new
+                    {
+                        season = semesterPart.Length > 0 ? semesterPart[0] : "",
+                        year = semesterPart.Length > 1 ? semesterPart[1] : "",
+                        location = c.Location,
+                        start = c.Starttime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                        end = c.Endtime?.ToString("yyyy-MM-dd HH:mm:ss"),
+                        fname = c.Professor.User.Firstname,
+                        lname = c.Professor.User.Lastname
+                    };
+                });
+            
+            
+            return Json(classes1);
         }
 
         /// <summary>
@@ -86,8 +123,22 @@ namespace ProjectPhase3.Controllers
         /// <param name="asgname">The name of the assignment in the category</param>
         /// <returns>The assignment contents</returns>
         public IActionResult GetAssignmentContents(string subject, int num, string season, int year, string category, string asgname)
-        {            
-            return Content("");
+        {
+            var assignment = db.Assignments
+                .FirstOrDefault(a =>
+                    a.Assignmentname == asgname &&
+                    a.Categorynames == category &&
+                    a.Assignmentcategory != null &&
+                    a.Assignmentcategory.Class.Semester == season + " " + year &&
+                    a.Assignmentcategory.Class.Catalog.Subjectabbreviation == subject &&
+                    a.Assignmentcategory.Class.Catalog.Coursenumber == num);
+
+            if (assignment == null)
+            {
+                return Content("");
+            }
+
+            return Content(assignment.Content ?? "");
         }
 
 
@@ -106,8 +157,27 @@ namespace ProjectPhase3.Controllers
         /// <param name="uid">The uid of the student who submitted it</param>
         /// <returns>The submission text</returns>
         public IActionResult GetSubmissionText(string subject, int num, string season, int year, string category, string asgname, string uid)
-        {            
-            return Content("");
+        {
+            if (string.IsNullOrWhiteSpace(uid) || !int.TryParse(uid.TrimStart('u', 'U'), out int userId))
+            {
+                return Content("");
+            }
+            var submission = db.Submissions
+                .FirstOrDefault(s => 
+                    s.Userid == userId && 
+                    s.Assignment.Assignmentname == asgname &&
+                    s.Assignment.Categorynames == category &&
+                    s.Assignment.Assignmentcategory != null &&
+                    s.Assignment.Assignmentcategory.Class.Semester == season + " " + year &&
+                    s.Assignment.Assignmentcategory.Class.Catalog.Subjectabbreviation == subject &&
+                    s.Assignment.Assignmentcategory.Class.Catalog.Coursenumber == num
+                    );
+
+            if (submission == null)
+            {
+                return Content("");
+            }
+            return Content(submission.Submissioncontents ?? "");
         }
 
 
@@ -128,7 +198,57 @@ namespace ProjectPhase3.Controllers
         /// or an object containing {success: false} if the user doesn't exist
         /// </returns>
         public IActionResult GetUser(string uid)
-        {           
+        {      
+            if (string.IsNullOrWhiteSpace(uid) || !int.TryParse(uid.TrimStart('u', 'U'), out int userId))
+            {
+                return Json(new { success = false, error = "" });
+            }
+            var user =  db.Users
+                .FirstOrDefault(u => u.Userid == userId);
+            if (user == null)
+            {
+                return Json(new { success = false, error = "User not found" });
+            }
+            
+            var professor = db.Professors
+                .FirstOrDefault(p => p.Userid == user.Userid);
+            if (professor != null)
+            {
+                return Json(new
+                {
+                    fname = user.Firstname,
+                    lname = user.Lastname,
+                    uid = "u" + user.Userid,
+                    department = professor.SubjectabbreviationNavigation?.Departmentname
+                });
+            }
+            
+            var student = db.Students.FirstOrDefault(s => s.Userid == user.Userid);
+            if (student != null)
+            {
+                return Json(new
+                    {
+                        fname = user.Firstname,
+                        lname = user.Lastname,
+                        uid = "u" + user.Userid,
+                        department = student.SubjectabbreviationNavigation?.Departmentname
+                    }
+                );
+            }
+            
+            var administrator = db.Administrators.FirstOrDefault(a => a.Userid == user.Userid);
+            if (administrator != null)
+            {
+                return Json(new
+                    {
+                        fname = user.Firstname,
+                        lname = user.Lastname,
+                        uid = "u" + user.Userid,
+                    }
+                );
+            }
+            
+                
             return Json(new { success = false });
         }
 
