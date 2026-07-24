@@ -47,6 +47,36 @@ namespace ProjectPhase3.Controllers
         /// false if the department already exists, true otherwise.</returns>
         public IActionResult CreateDepartment(string subject, string name)
         {
+            
+            // validate before create 
+            subject = subject?.Trim().ToUpper();
+            name = name?.Trim();
+
+            if (string.IsNullOrEmpty(subject) || string.IsNullOrEmpty(name))
+            {
+                return Json(new
+                {
+                    success = false,
+                    message = "Subject or name are required."
+                });
+            }
+
+            if (subject.Length > 4)
+            {
+                return Json(new
+                    {
+                        success = false,
+                        message = "Subject abbreviation cannot be longer than 4 characters."
+                    }
+                );
+            }
+            
+            bool alreadyExists = db.Departments.Any(d => d.Subjectabbreviation == subject);
+            if (alreadyExists)
+            {
+                return Json(new { success = false, message = "Department already exists." });
+            }
+            
             var newDepartment = new Department
             {
                 Subjectabbreviation = subject,
@@ -62,7 +92,7 @@ namespace ProjectPhase3.Controllers
             }
             catch (DbUpdateException e)
             {
-                return Json(new { success = false });
+                return Json(new { success = false, message = "Unable to add department." });
             }
         }
 

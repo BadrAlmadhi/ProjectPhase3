@@ -135,7 +135,7 @@ public partial class LmsContext : DbContext
             entity.ToTable("courses");
 
             entity.Property(e => e.Catalogid)
-                .ValueGeneratedNever()
+                .ValueGeneratedOnAdd()
                 .HasColumnName("catalogid");
             entity.Property(e => e.Coursename)
                 .HasMaxLength(100)
