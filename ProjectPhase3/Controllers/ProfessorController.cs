@@ -487,44 +487,40 @@ namespace ProjectPhase3.Controllers
 
         private string CalculateStudentClassGrade(int userid, int classid)
         {
-            // Get all submissions for this student in this class
-            var submissions = db.Submissions
-                .Where(sub => sub.Userid == userid && sub.Classid == classid)
-                .Join(db.Assignments,
-                    sub => sub.Assignmentid,
-                    asg => asg.Assignmentid,
-                    (sub, asg) => new { sub, asg })
-                .Where(p => p.asg.Classid == classid) // Filter by class after join
-                .Where(p => p.sub.Score.HasValue && p.asg.Maxpoint.HasValue)
-                .Select(p => new
-                {
-                    score = (double)p.sub.Score.Value,
-                    maxpoints = (double)p.asg.Maxpoint.Value,
-                    category = p.asg.Categorynames
-                })
-                .ToList();
+            // 1. Fetch ALL assignments for the class and left join student submissions
+            var assignmentData = (from asg in db.Assignments.AsQueryable()
+                                  where asg.Classid == classid && asg.Maxpoint.HasValue && asg.Maxpoint.Value > 0
+                                  join sub in db.Submissions.Where(s => s.Userid == userid)
+                                  on asg.Assignmentid equals sub.Assignmentid into subGroup
+                                  from studentSub in subGroup.DefaultIfEmpty()
+                                  select new
+                                  {
+                                      // Default missing submissions to 0 points
+                                      Score = (studentSub != null && studentSub.Score.HasValue) ? (double)studentSub.Score.Value : 0.0,
+                                      MaxPoints = (double)asg.Maxpoint.Value,
+                                      Category = asg.Categorynames
+                                  }).ToList();
 
-            if (!submissions.Any())
+            if (!assignmentData.Any())
             {
-                return "N/A"; // No submissions yet
+                return "N/A";
             }
 
-            // Group by category and calculate average for each
-            var categoryAverages = submissions
-                .GroupBy(s => s.category)
+            // 2. Compute true category point percentages: Sum(Scores) / Sum(MaxPoints)
+            var categoryAverages = assignmentData
+                .GroupBy(a => a.Category)
                 .Select(g => new
                 {
-                    category = g.Key,
-                    average = g.Average(s => s.score / s.maxpoints)
+                    Category = g.Key,
+                    Average = g.Sum(x => x.Score) / g.Sum(x => x.MaxPoints)
                 })
-                .ToDictionary(x => x.category, x => x.average);
+                .ToDictionary(x => x.Category, x => x.Average);
 
-            // Get category weights from AssignmentCategories table for this class
+            // 3. Load active category weights
             var categoryWeights = db.Assignmentcategories
                 .Where(ac => ac.Classid == classid)
                 .ToDictionary(ac => ac.Categorynames, ac => (ac.Gradingweight ?? 0) / 100.0);
 
-            // Calculate weighted average
             double weightedAverage = 0;
             double totalWeight = 0;
 
@@ -537,19 +533,19 @@ namespace ProjectPhase3.Controllers
                 }
             }
 
-            // Normalize if not all categories are present
+            // 4. Normalize weights and convert back to a 0-100 scale for GradeCalculator
             if (totalWeight > 0)
             {
-                weightedAverage /= totalWeight;
+                weightedAverage = (weightedAverage / totalWeight) * 100.0;
             }
             else
             {
-                return "N/A"; // No valid categories with weights
+                return "N/A";
             }
 
-            // Convert to letter grade
             return GradeCalculator(weightedAverage);
         }
+
 
         // Normalize if not all categories
         
@@ -580,7 +576,7 @@ namespace ProjectPhase3.Controllers
                         (ac, co) => new { ac.assignment, ac.classid, ac.classobj, course = co })
                     .Where(p => p.course.Subjectabbreviation == subject)
                     .Where(p => p.course.Coursenumber == num)
-                    .Where(p => p.classobj.Semester == (season + year))  // ADD THIS
+                    .Where(p => p.classobj.Semester == (season + " " + year))  // ADD THIS
                     .Where(p => p.assignment.Assignmentname == asgname)
                     .Where(p => p.assignment.Categorynames == category)
                     .Select(p => new
@@ -599,16 +595,30 @@ namespace ProjectPhase3.Controllers
                 int userid = int.Parse(uid);
                 
                 // Create and save submission
-                var newSub = new Submission
+                var existingSubmission = db.Submissions.FirstOrDefault(s =>
+                    s.Assignmentid == assignmentInfo.assignmentid &&
+                    s.Userid == userid);
+
+                if (existingSubmission == null)
                 {
-                    Assignmentid = assignmentInfo.assignmentid,
-                    Userid = userid,
-                    Score = score,
-                    Classid = assignmentInfo.classid,
-                    Submissiontime = DateTime.Now
-                };
-                
-                db.Submissions.Add(newSub);
+                    // Fallback generation path if no file submission exists yet
+                    var newSub = new Submission
+                    {
+                        Assignmentid = assignmentInfo.assignmentid,
+                        Userid = userid,
+                        Score = score,
+                        Classid = assignmentInfo.classid,
+                        Submissioncontents = "", 
+                        Submissiontime = DateTime.Now
+                    };
+                    db.Submissions.Add(newSub);
+                }
+                else
+                {
+                    // Standard update path overriding the prior submission entry
+                    existingSubmission.Score = score;
+                }
+        
                 db.SaveChanges();
 
                 // Recalculate student's overall grade
