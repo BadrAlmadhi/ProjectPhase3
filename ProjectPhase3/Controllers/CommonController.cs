@@ -26,14 +26,14 @@ namespace ProjectPhase3.Controllers
         /// <returns>The JSON array</returns>
         public IActionResult GetDepartments()
         {
-            var departments = db.Departments;
-            departments.Select(d => new
+            var departments = db.Departments
+            .Select(d => new
             {
                 name = d.Departmentname,
                 subject = d.Subjectabbreviation
-            });
+            }).ToArray();
            
-            return Json(null);
+            return Json(departments);
         }
 
 
