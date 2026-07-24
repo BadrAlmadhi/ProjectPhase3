@@ -487,26 +487,23 @@ namespace ProjectPhase3.Controllers
 
         private string CalculateStudentClassGrade(int userid, int classid)
         {
-            // 1. Fetch ALL assignments for the class and left join student submissions
-            var assignmentData = (from asg in db.Assignments.AsQueryable()
-                                  where asg.Classid == classid && asg.Maxpoint.HasValue && asg.Maxpoint.Value > 0
-                                  join sub in db.Submissions.Where(s => s.Userid == userid)
-                                  on asg.Assignmentid equals sub.Assignmentid into subGroup
-                                  from studentSub in subGroup.DefaultIfEmpty()
-                                  select new
-                                  {
-                                      // Default missing submissions to 0 points
-                                      Score = (studentSub != null && studentSub.Score.HasValue) ? (double)studentSub.Score.Value : 0.0,
-                                      MaxPoints = (double)asg.Maxpoint.Value,
-                                      Category = asg.Categorynames
-                                  }).ToList();
+            var assignmentData = (from asg in db.Assignments.AsNoTracking()
+                where asg.Classid == classid && asg.Maxpoint.HasValue && asg.Maxpoint.Value > 0
+                join sub in db.Submissions.AsNoTracking().Where(s => s.Userid == userid)
+                    on asg.Assignmentid equals sub.Assignmentid into subGroup
+                from studentSub in subGroup.DefaultIfEmpty()
+                select new
+                {
+                    Score = (studentSub != null && studentSub.Score.HasValue) ? (double)studentSub.Score.Value : 0.0,
+                    MaxPoints = (double)asg.Maxpoint.Value,
+                    Category = asg.Categorynames.Trim() // Trim spaces to prevent string mismatch bugs
+                }).ToList();
 
             if (!assignmentData.Any())
             {
                 return "N/A";
             }
 
-            // 2. Compute true category point percentages: Sum(Scores) / Sum(MaxPoints)
             var categoryAverages = assignmentData
                 .GroupBy(a => a.Category)
                 .Select(g => new
@@ -516,10 +513,11 @@ namespace ProjectPhase3.Controllers
                 })
                 .ToDictionary(x => x.Category, x => x.Average);
 
-            // 3. Load active category weights
+            // Trim keys here too to guarantee dictionary matches
             var categoryWeights = db.Assignmentcategories
+                .AsNoTracking()
                 .Where(ac => ac.Classid == classid)
-                .ToDictionary(ac => ac.Categorynames, ac => (ac.Gradingweight ?? 0) / 100.0);
+                .ToDictionary(ac => ac.Categorynames.Trim(), ac => (ac.Gradingweight ?? 0) / 100.0);
 
             double weightedAverage = 0;
             double totalWeight = 0;
@@ -533,10 +531,9 @@ namespace ProjectPhase3.Controllers
                 }
             }
 
-            // 4. Normalize weights and convert back to a 0-100 scale for GradeCalculator
             if (totalWeight > 0)
             {
-                weightedAverage = (weightedAverage / totalWeight) * 100.0;
+                weightedAverage = weightedAverage / totalWeight; 
             }
             else
             {
@@ -620,8 +617,7 @@ namespace ProjectPhase3.Controllers
                 }
         
                 db.SaveChanges();
-
-                // Recalculate student's overall grade
+                
                 var enrollmentRecord = db.Enrollments
                     .FirstOrDefault(e => e.Userid == userid && e.Classid == assignmentInfo.classid);
 
